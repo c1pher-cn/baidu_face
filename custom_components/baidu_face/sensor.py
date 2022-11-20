@@ -47,7 +47,7 @@ DEFAULT_SCORE = 80
 DEFAULT_REQUEST_TYPE = "HTTP"
 DEFAULT_LOCAL_FILE = 'none'
 
-SCAN_INTERVAL = timedelta(seconds=2)
+SCAN_INTERVAL = timedelta(seconds=30)
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Required(CONF_APP_ID): cv.string,
@@ -88,7 +88,7 @@ def setup_platform(hass, config, add_devices,
     score = config.get(CONF_SCORE)
     local_file = config.get(CONF_LOCAL_FILE)
     """ check SSL/HTTPS type """
-    try:
+    try: 
         http_url = "https://127.0.0.1:{}".format(port)
         camera_url = "{}/api/camera_proxy/{}".format(http_url, camera_entity_id)
         headers = {'Authorization': "Bearer {}".format(token),
@@ -141,8 +141,13 @@ class FaceSensor(Entity):
     def state(self):
         return self._state
 
+#    @property
+#    def device_state_attributes(self):
+#        return self._attr
+    
     @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
+        """Return entity specific state attributes."""
         return self._attr
 
     def update(self):
@@ -152,7 +157,7 @@ class FaceSensor(Entity):
     def get_picture(self):
         """ download picture from homeassistant """
         if(self._file_name!='none'):
-            #_LOGGER.info('Get pic from file')
+            #_LOGGER.error('Get pic from file')
             temp_path = self._tmp_dir + self._file_name + '_temp.jpg'
             '''read source picture file '''
             if not os.path.exists(self._file_path):
@@ -166,7 +171,7 @@ class FaceSensor(Entity):
                     fp.write(content)
                     fp.close()
                 return content
-            '''have a temp_file then compare it'''
+            '''have a temp_file then compare it''' 
             with open(temp_path, 'rb') as fp:
                 content_temp = fp.read()
                 fp.close()
@@ -179,9 +184,9 @@ class FaceSensor(Entity):
                     fp.write(content)
                     fp.close()
                 return content
-
+    
         else:
-            #_LOGGER.info('Get pic from ha camera')
+            #_LOGGER.error('Get pic from ha camera')
             t = int(round(time.time()))
             headers = {'Authorization': "Bearer {}".format(self._token),
                    'content-type': 'application/json'}
@@ -190,26 +195,28 @@ class FaceSensor(Entity):
                 camera_url = "{}/api/camera_proxy/{}?time={} -o image.jpg".format(http_url, self._camera_entity_id, t)
                 response = requests.get(camera_url, headers=headers)
                 return response.content
-            if self._type == "HTTPS":
+            if self._type == "HTTPS": 
                 https_url = "https://127.0.0.1:{}".format(self._port)
                 camera_url = "{}/api/camera_proxy/{}?time={} -o image.jpg".format(https_url, self._camera_entity_id, t)
                 response = requests.get(camera_url, headers=headers, verify=False)
                 return response.content
 
-    def save_picture(self, max_score_person, content):
-        file_name = max_score_person[ATTR_UID]
-        box = (max_score_person["location"]["left"]-20, max_score_person["location"]["top"]-30, max_score_person["location"]["left"] + max_score_person["location"]["width"] + 30, max_score_person["location"]["top"] +max_score_person["location"]["height"] + 30)
-        save_path = self._tmp_dir + file_name + '.jpg'
-        temp_path = self._tmp_dir + self._file_name + '_temp.jpg'
-        if(self._file_name!='none'):
-            img = Image.open(temp_path)
-            img.crop(box).save(save_path ,"JPEG", quality=80, optimize=True, progressive=True)
-            _LOGGER.info('save from pic file')
-        else:
-            img = Image.open(io.BytesIO(content))
-            img.crop(box).save(save_path ,"JPEG", quality=80, optimize=True, progressive=True)
-            _LOGGER.info('save from camera IO byte')
-        #with open(save_path, 'wb') as fp:
+    def save_picture(self, face_list, content):
+        for max_score_person in face_list: 
+            file_name = max_score_person[ATTR_UID]
+            _LOGGER.error('save the pitcure of :'+max_score_person[ATTR_UID])
+            box = (max_score_person["location"]["left"]-30, max_score_person["location"]["top"]-80, max_score_person["location"]["left"] + max_score_person["location"]["width"] + 30, max_score_person["location"]["top"] +max_score_person["location"]["height"] + 30)
+            save_path = self._tmp_dir + file_name + '.jpg'
+            temp_path = self._tmp_dir + self._file_name + '_temp.jpg'
+            if(self._file_name!='none'):
+                img = Image.open(temp_path)
+                img.crop(box).save(save_path ,"JPEG", quality=80, optimize=True, progressive=True)
+                _LOGGER.info('save from pic file')
+            else:
+                img = Image.open(io.BytesIO(content))
+                img.crop(box).save(save_path ,"JPEG", quality=80, optimize=True, progressive=True)
+                _LOGGER.info('save from camera IO byte')
+        #with open(save_path, 'wb') as fp:    
         #  fp.write(content)
         #    fp.close()
 
@@ -222,14 +229,14 @@ class FaceSensor(Entity):
             base64_data= base64.b64encode(origin_img)
             encode_img = str(base64_data,'UTF-8')
             #encode_img = bytes.decode(encode_img)
-            #_LOGGER.info(encode_img)
+            #_LOGGER.error(encode_img)
 
         else:
             origin_img = self.get_picture()
             base64_data= base64.b64encode(origin_img)
             #encode_img = str(base64_data,'UTF-8')
             encode_img = bytes.decode(base64_data)
-
+        
         image_type = 'BASE64'
         ret = self._baidu_client.multiSearch(encode_img, image_type, self._group_list, self._options)
         self._attr = {}
@@ -243,7 +250,7 @@ class FaceSensor(Entity):
         self._attr[ATTR_FACE_LOCATION] = []
         max_score_person = None
         face_list = []
-        #_LOGGER.info(ret)
+        #_LOGGER.error(ret)
         if ret['result'] is not None:
             self._attr[ATTR_FACE_NUM] = ret['result']['face_num']
             for i in ret['result']['face_list']:
@@ -257,15 +264,22 @@ class FaceSensor(Entity):
                     self._attr[ATTR_MATCH_NUM] += 1
                     self._attr[ATTR_USER_LIST].append(i['user_list'][0]['user_id'])
                     self._attr[ATTR_FACE_LOCATION].append(i['location'])
-        #        face_list.append(max_score_person)
-        #_LOGGER.info(face_list)
-        #_LOGGER.info(max_score_person)
-        self._state = False
+                j = {}
+                j['location']=i['location']
+                j['user_id']=i['user_list'][0]['user_id']
+                j['score']=i['user_list'][0]['score']
+                face_list.append(j)
+
+        _LOGGER.error(self._attr[ATTR_USER_LIST])
+        #_LOGGER.error(max_score_person)
         if max_score_person is not None:
             self._state = True
             self._attr[ATTR_GROUP_ID] = max_score_person[ATTR_GROUP_ID]
             self._attr[ATTR_UID] = max_score_person[ATTR_UID]
             self._attr[ATTR_USER_INFO] = max_score_person[ATTR_USER_INFO]
             self._attr[ATTR_SCORE] = max_score_person[ATTR_SCORE]
-            _LOGGER.info('find some one'+self._attr[ATTR_UID])
-            self.save_picture(max_score_person, origin_img)
+            _LOGGER.error('find some one '+self._attr[ATTR_UID])
+            self.save_picture(face_list, origin_img)
+            #self.save_picture(max_score_person, origin_img)
+        else:
+            self._state = False
